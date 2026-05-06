@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Embalses de España</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <style>
+    :root { --t: .25s ease; }
+
+    [data-theme="dark"] {
+      --bg:#0b0f14; --bg2:#131920; --bg3:#1c2430; --bg4:#242e3a;
+      --border:#2a3547; --border2:#364457;
+      --text:#dde4ee; --text2:#7d91a8; --text3:#4d6070;
+      --accent:#3b9eff; --accent2:#1e6fcc;
+      --green:#22c98a; --amber:#f5a623; --red:#f05252;
+      --green-bg:rgba(34,201,138,.12); --amber-bg:rgba(245,166,35,.12); --red-bg:rgba(240,82,82,.12);
+      --shadow:0 4px 24px rgba(0,0,0,.5);
+      --map-filter:brightness(.85) saturate(.8);
+    }
+    [data-theme="light"] {
+      --bg:#f0f4f8; --bg2:#ffffff; --bg3:#e8eef5; --bg4:#dde5ef;
+      --border:#cdd6e2; --border2:#b5c1d0;
+      --text:#1a2535; --text2:#52667a; --text3:#8899aa;
+      --accent:#1a6fd4; --accent2:#1355a8;
+      --green:#0e9e6a; --amber:#d4820a; --red:#d13535;
+      --green-bg:rgba(14,158,106,.1); --amber-bg:rgba(212,130,10,.1); --red-bg:rgba(209,53,53,.1);
+      --shadow:0 4px 24px rgba(0,0,0,.12);
+      --map-filter:none;
+    }
+
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0; }
+    html { scroll-behavior:smooth; }
+    body {
+      font-family:'DM Sans',sans-serif;
+      background:var(--bg); color:var(--text); min-height:100vh;
+      transition:background var(--t), color var(--t);
+    }
+
+    /* ── HEADER ── */
+    header {
+      background:var(--bg2); border-bottom:1px solid var(--border);
+      padding:0 2rem; height:64px;
+      display:flex; align-items:center; gap:14px;
+      position:sticky; top:0; z-index:1000;
+      transition:background var(--t), border-color var(--t);
+    }
+    .logo-mark {
+      width:38px; height:38px;
+      background:linear-gradient(135deg,var(--accent),var(--accent2));
+      border-radius:10px; display:flex; align-items:center; justify-content:center;
+      font-size:18px; flex-shrink:0;
+    }
+    .hdr-title h1 { font-size:1rem; font-weight:600; color:var(--text); letter-spacing:-.01em; }
+    .hdr-title p  { font-size:11px; color:var(--text2); margin-top:1px; }
+    .hdr-right    { margin-left:auto; display:flex; align-items:center; gap:10px; }
+    .chip {
+      font-size:11px; font-weight:500; padding:4px 10px;
+      background:rgba(59,158,255,.1); color:var(--accent);
+      border:1px solid rgba(59,158,255,.25); border-radius:20px; white-space:nowrap;
+    }
+    .theme-btn {
+      width:38px; height:38px; border:1px solid var(--border2); background:var(--bg3);
+      border-radius:10px; cursor:pointer; display:flex; align-items:center; justify-content:center;
+      font-size:16px; transition:background var(--t), border-color var(--t), transform .15s; color:var(--text2);
+    }
+    .theme-btn:hover { background:var(--bg4); transform:scale(1.08); }
+
+    /* ── MAIN ── */
+    main { max-width:1400px; margin:0 auto; padding:1.75rem 2rem 3rem; }
+
+    /* ── METRICS ── */
+    .metrics {
+      display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:1.75rem;
+    }
+    @media(max-width:900px){.metrics{grid-template-columns:repeat(3,1fr)}}
+    @media(max-width:500px){.metrics{grid-template-columns:repeat(2,1fr)}}
+    .metric {
+      background:var(--bg2); border:1px solid var(--border); border-radius:12px;
+      padding:1.1rem 1.2rem; transition:border-color var(--t),background var(--t),transform .15s; cursor:default;
+      animation:fadeUp .4s ease both;
+    }
+    .metric:nth-child(1){animation-delay:.05s} .metric:nth-child(2){animation-delay:.10s}
+    .metric:nth-child(3){animation-delay:.15s} .metric:nth-child(4){animation-delay:.20s}
+    .metric:nth-child(5){animation-delay:.25s}
+    .metric:hover { border-color:var(--accent); transform:translateY(-2px); }
+    .metric.hi { border-color:rgba(59,158,255,.3); background:rgba(59,158,255,.05); }
+    .metric .lbl { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.1em; color:var(--text2); margin-bottom:8px; }
+    .metric .val { font-size:1.9rem; font-weight:600; color:var(--text); line-height:1; font-family:'DM Mono',monospace; }
+    .metric.hi .val { color:var(--accent); }
+    .metric .sub { font-size:11px; color:var(--text3); margin-top:5px; }
+
+    /* ── SEC LABEL ── */
+    .sec { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.12em; color:var(--text3); margin-bottom:10px; }
+
+    /* ── FILTERS ── */
+    .filters-bar {
+      display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+      background:var(--bg2); border:1px solid var(--border); border-radius:12px;
+      padding:12px 16px; margin-bottom:1.5rem;
+      transition:background var(--t), border-color var(--t);
+    }
+    .filters-bar input, .filters-bar select {
+      font-family:'DM Sans',sans-serif; font-size:13px;
+      background:var(--bg3); border:1px solid var(--border); color:var(--text);
+      border-radius:8px; padding:7px 12px; height:36px; outline:none;
+      transition:border-color .2s, background var(--t); cursor:pointer;
+    }
+    .filters-bar input { flex:1; min-width:180px; }
+    .filters-bar input:focus, .filters-bar select:focus { border-color:var(--accent); }
+    .filters-bar select option { background:var(--bg2); color:var(--text); }
+    .fsep { width:1px; height:22px; background:var(--border); flex-shrink:0; }
+    .reset-btn {
+      font-family:'DM Sans',sans-serif; font-size:12px; font-weight:500;
+      background:none; border:1px solid var(--border2); color:var(--text2);
+      border-radius:8px; padding:6px 12px; height:36px; cursor:pointer; white-space:nowrap;
+      transition:all .15s;
+    }
+    .reset-btn:hover { color:var(--red); border-color:var(--red); background:var(--red-bg); }
+    .map-pill {
+      display:none; font-size:11px; font-weight:600;
+      background:rgba(59,158,255,.15); color:var(--accent);
+      border:1px solid rgba(59,158,255,.3); border-radius:20px; padding:4px 10px;
+      align-items:center; gap:6px; white-space:nowrap;
+    }
+    .map-pill.on { display:flex; }
+    .map-pill button { background:none; border:none; color:var(--accent); cursor:pointer; font-size:13px; line-height:1; padding:0; }
+
+    /* ── MAP + TABLE GRID ── */
+    .split { display:grid; grid-template-columns:420px 1fr; gap:1.25rem; margin-bottom:1.5rem; align-items:start; }
+    @media(max-width:1024px){.split{grid-template-columns:1fr}}
+
+    .map-card {
+      background:var(--bg2); border:1px solid var(--border); border-radius:14px; overflow:hidden;
+      transition:border-color var(--t),background var(--t); position:sticky; top:80px;
+    }
+    .card-hdr {
+      padding:11px 16px; border-bottom:1px solid var(--border);
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .card-hdr .sec { margin-bottom:0; }
+    .map-hint { font-size:11px; color:var(--text3); }
+
+    #map { height:520px; filter:var(--map-filter); transition:filter var(--t); }
+
+    /* Leaflet popup */
+    .leaflet-popup-content-wrapper {
+      background:var(--bg2) !important; color:var(--text) !important;
+      border:1px solid var(--border) !important; border-radius:10px !important;
+      box-shadow:var(--shadow) !important; font-family:'DM Sans',sans-serif !important;
+    }
+    .leaflet-popup-tip { background:var(--bg2) !important; }
+    .leaflet-popup-content { margin:10px 14px !important; }
+    .pname { font-weight:600; font-size:14px; margin-bottom:6px; color:var(--text); }
+    .prow  { font-size:12px; color:var(--text2); display:flex; justify-content:space-between; gap:16px; padding:2px 0; }
+    .prow span:last-child { font-weight:500; color:var(--text); font-family:'DM Mono',monospace; }
+    .pbar-bg   { height:5px; background:var(--bg3); border-radius:3px; margin-top:8px; }
+    .pbar-fill { height:5px; border-radius:3px; }
+
+    .table-card {
+      background:var(--bg2); border:1px solid var(--border); border-radius:14px; overflow:hidden;
+      transition:border-color var(--t), background var(--t);
+    }
+    .cnt-badge {
+      font-size:11px; font-weight:600; font-family:'DM Mono',monospace;
+      background:var(--bg3); color:var(--text2); border:1px solid var(--border); border-radius:20px; padding:3px 10px;
+    }
+    .table-wrap { overflow-x:auto; max-height:520px; overflow-y:auto; }
+
+    table { width:100%; border-collapse:collapse; font-size:13px; }
+    thead th {
+      position:sticky; top:0; z-index:2; background:var(--bg3);
+      font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.08em; color:var(--text2);
+      padding:9px 14px; text-align:left; border-bottom:1px solid var(--border);
+      cursor:pointer; user-select:none; white-space:nowrap; transition:background var(--t);
+    }
+    thead th:hover { color:var(--text); }
+    thead th .si { margin-left:4px; opacity:.3; font-size:10px; }
+    thead th.sorted .si { opacity:1; color:var(--accent); }
+    tbody td { padding:10px 14px; border-bottom:1px solid var(--border); vertical-align:middle; transition:background .1s; }
+    tbody tr:last-child td { border-bottom:none; }
+    tbody tr:hover td { background:var(--bg3); }
+    tbody tr.hl td { background:rgba(59,158,255,.08); }
+    tbody tr { cursor:pointer; }
+    td.tn { font-weight:500; color:var(--text); }
+    td.tc { color:var(--text2); }
+    td.tm { text-align:right; font-family:'DM Mono',monospace; font-size:12px; }
+
+    .barcell { display:flex; align-items:center; gap:8px; min-width:110px; }
+    .barbg   { flex:1; background:var(--bg3); border-radius:3px; height:5px; min-width:50px; }
+    .barfill { height:5px; border-radius:3px; transition:width .4s ease; }
+    .plbl    { font-size:11px; font-family:'DM Mono',monospace; color:var(--text2); min-width:34px; text-align:right; }
+
+    .badge { display:inline-block; font-size:10px; font-weight:600; padding:3px 8px; border-radius:20px; white-space:nowrap; }
+    .bg { background:var(--green-bg); color:var(--green); border:1px solid rgba(34,201,138,.25); }
+    .ba { background:var(--amber-bg); color:var(--amber); border:1px solid rgba(245,166,35,.25); }
+    .br { background:var(--red-bg);   color:var(--red);   border:1px solid rgba(240,82,82,.25); }
+
+    /* ── CHARTS ── */
+    .charts-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1.25rem; margin-bottom:1.5rem; }
+    @media(max-width:900px){.charts-row{grid-template-columns:1fr}}
+    .chart-card {
+      background:var(--bg2); border:1px solid var(--border); border-radius:14px; padding:1.25rem;
+      transition:border-color var(--t), background var(--t);
+    }
+    .chart-card .sec { margin-bottom:14px; }
+    .legend { display:flex; flex-wrap:wrap; gap:8px; font-size:10px; color:var(--text2); margin-bottom:12px; }
+    .legend span { display:flex; align-items:center; gap:4px; }
+    .ldot { width:8px; height:8px; border-radius:2px; flex-shrink:0; }
+
+    /* ── FOOTER ── */
+    footer {
+      text-align:center; font-size:11px; color:var(--text3);
+      padding-top:2rem; border-top:1px solid var(--border); transition:border-color var(--t);
+    }
+    footer a { color:var(--accent); text-decoration:none; }
+    footer a:hover { text-decoration:underline; }
+
+    @keyframes fadeUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo-mark">💧</div>
+  <div class="hdr-title">
+    <h1>Embalses de España</h1>
+    <p>Capacidad y reserva hídrica — cuencas peninsulares</p>
+  </div>
+  <div class="hdr-right">
+    <span class="chip">MITECO · 2024</span>
+    <button class="theme-btn" id="themeBtn" title="Cambiar tema">🌙</button>
+  </div>
+</header>
+
+<main>
+
+  <div class="metrics" id="metrics"></div>
+
+  <div class="filters-bar">
+    <input type="text" id="search" placeholder="🔍  Buscar embalse o cuenca…">
+    <div class="fsep"></div>
+    <select id="cuenca-filter"><option value="">Todas las cuencas</option></select>
+    <select id="estado-filter">
+      <option value="">Todos los estados</option>
+      <option value="bien">✅  Bien (≥ 60%)</option>
+      <option value="alerta">⚠️  Alerta (30–60%)</option>
+      <option value="critico">🔴  Crítico (&lt; 30%)</option>
+    </select>
+    <select id="sort-select">
+      <option value="capacidad-desc">Mayor capacidad</option>
+      <option value="capacidad-asc">Menor capacidad</option>
+      <option value="pct-desc">Mayor llenado</option>
+      <option value="pct-asc">Menor llenado</option>
+      <option value="nombre-asc">Nombre A–Z</option>
+    </select>
+    <div class="fsep"></div>
+    <div class="map-pill" id="mapPill">📍 Filtrado por mapa <button onclick="clearMapFilter()">✕</button></div>
+    <button class="reset-btn" onclick="resetAll()">Limpiar todo</button>
+  </div>
+
+  <div class="split">
+    <div class="map-card">
+      <div class="card-hdr">
+        <span class="sec">Mapa interactivo</span>
+        <span class="map-hint">Clic en marcador para filtrar</span>
+      </div>
+      <div id="map"></div>
+    </div>
+
+    <div class="table-card">
+      <div class="card-hdr">
+        <span class="sec">Listado de embalses</span>
+        <span class="cnt-badge" id="count">0</span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th data-key="nombre">Nombre <span class="si">↕</span></th>
+            <th data-key="cuenca">Cuenca <span class="si">↕</span></th>
+            <th data-key="cap">Cap. hm³ <span class="si">↕</span></th>
+            <th data-key="emb">Emb. hm³ <span class="si">↕</span></th>
+            <th data-key="pct">Llenado <span class="si">↕</span></th>
+            <th>Estado</th>
+          </tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="charts-row">
+    <div class="chart-card">
+      <p class="sec">Capacidad por cuenca</p>
+      <div class="legend" id="leg1"></div>
+      <div style="position:relative;height:240px"><canvas id="c1"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <p class="sec">% Llenado — top 10</p>
+      <div style="position:relative;height:240px"><canvas id="c2"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <p class="sec">Distribución por estado</p>
+      <div style="position:relative;height:190px"><canvas id="c3"></canvas></div>
+      <div class="legend" style="justify-content:center;margin-top:10px;margin-bottom:0">
+        <span><span class="ldot" style="background:#22c98a"></span>Bien</span>
+        <span><span class="ldot" style="background:#f5a623"></span>Alerta</span>
+        <span><span class="ldot" style="background:#f05252"></span>Crítico</span>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<footer>
+  Datos orientativos · <a href="https://www.miteco.gob.es/es/agua/temas/evaluacion-de-los-recursos-hidricos/boletin-hidrologico/" target="_blank">Boletín Hidrológico MITECO</a>
+  &nbsp;·&nbsp; <a href="https://wmts.mapama.gob.es/sig-api/ogc/features/v1/collections" target="_blank">API oficial</a>
+</footer>
+
+<script>
+/* ── DATOS ── */
+const EMBALSES = [
+  {nombre:"Alcántara",         cuenca:"Tajo",         cap:3162,emb:1020,lat:39.73,lng:-6.87},
+  {nombre:"Valdecañas",        cuenca:"Tajo",         cap:1446,emb:620, lat:39.80,lng:-5.50},
+  {nombre:"Buendía",           cuenca:"Tajo",         cap:1639,emb:540, lat:40.38,lng:-2.76},
+  {nombre:"Gabriel y Galán",   cuenca:"Tajo",         cap:925, emb:480, lat:40.19,lng:-6.23},
+  {nombre:"Entrepeñas",        cuenca:"Tajo",         cap:835, emb:168, lat:40.56,lng:-2.69},
+  {nombre:"Azután",            cuenca:"Tajo",         cap:197, emb:88,  lat:39.75,lng:-5.00},
+  {nombre:"Santillana",        cuenca:"Tajo",         cap:91,  emb:62,  lat:40.67,lng:-3.82},
+  {nombre:"Rosarito",          cuenca:"Tajo",         cap:89,  emb:36,  lat:40.10,lng:-5.42},
+  {nombre:"Alqueva",           cuenca:"Guadiana",     cap:4150,emb:3100,lat:38.20,lng:-7.49},
+  {nombre:"Serena (La)",       cuenca:"Guadiana",     cap:3234,emb:890, lat:38.77,lng:-5.40},
+  {nombre:"Cijara",            cuenca:"Guadiana",     cap:1670,emb:520, lat:39.28,lng:-4.87},
+  {nombre:"Orellana",          cuenca:"Guadiana",     cap:804, emb:210, lat:39.05,lng:-5.54},
+  {nombre:"García de Sola",    cuenca:"Guadiana",     cap:545, emb:198, lat:39.17,lng:-4.97},
+  {nombre:"Mequinenza",        cuenca:"Ebro",         cap:1530,emb:890, lat:41.36,lng:0.29},
+  {nombre:"Canelles",          cuenca:"Ebro",         cap:678, emb:95,  lat:42.04,lng:0.62},
+  {nombre:"Ebro",              cuenca:"Ebro",         cap:541, emb:430, lat:42.97,lng:-3.96},
+  {nombre:"Grado",             cuenca:"Ebro",         cap:399, emb:248, lat:42.35,lng:-0.30},
+  {nombre:"Ribarroja",         cuenca:"Ebro",         cap:210, emb:170, lat:41.28,lng:0.37},
+  {nombre:"Yesa",              cuenca:"Ebro",         cap:447, emb:310, lat:42.62,lng:-1.17},
+  {nombre:"Mediano",           cuenca:"Ebro",         cap:436, emb:280, lat:42.30,lng:-0.14},
+  {nombre:"Sotonera",          cuenca:"Ebro",         cap:189, emb:92,  lat:42.10,lng:-0.68},
+  {nombre:"Barasona",          cuenca:"Ebro",         cap:85,  emb:55,  lat:42.21,lng:0.44},
+  {nombre:"Tranquera (La)",    cuenca:"Ebro",         cap:84,  emb:48,  lat:41.56,lng:-1.81},
+  {nombre:"Alloz",             cuenca:"Ebro",         cap:66,  emb:48,  lat:42.73,lng:-1.87},
+  {nombre:"Caspe",             cuenca:"Ebro",         cap:82,  emb:38,  lat:41.27,lng:-0.06},
+  {nombre:"Calanda",           cuenca:"Ebro",         cap:55,  emb:22,  lat:40.95,lng:-0.27},
+  {nombre:"Búbal",             cuenca:"Ebro",         cap:62,  emb:28,  lat:42.59,lng:-0.38},
+  {nombre:"Santolea",          cuenca:"Ebro",         cap:48,  emb:15,  lat:40.79,lng:-0.24},
+  {nombre:"Alarcón",           cuenca:"Júcar",        cap:1118,emb:295, lat:39.56,lng:-2.10},
+  {nombre:"Contreras",         cuenca:"Júcar",        cap:852, emb:310, lat:39.74,lng:-1.49},
+  {nombre:"Tous",              cuenca:"Júcar",        cap:378, emb:62,  lat:39.08,lng:-0.77},
+  {nombre:"Loriguilla",        cuenca:"Júcar",        cap:68,  emb:21,  lat:39.58,lng:-0.91},
+  {nombre:"Iznajar",           cuenca:"Sur",          cap:981, emb:420, lat:37.25,lng:-4.30},
+  {nombre:"La Viñuela",        cuenca:"Sur",          cap:165, emb:42,  lat:36.83,lng:-4.11},
+  {nombre:"Guadalteba",        cuenca:"Sur",          cap:161, emb:52,  lat:36.97,lng:-4.77},
+  {nombre:"Rules",             cuenca:"Sur",          cap:107, emb:48,  lat:36.81,lng:-3.59},
+  {nombre:"Béznar",            cuenca:"Sur",          cap:56,  emb:24,  lat:36.92,lng:-3.54},
+  {nombre:"Breña II",          cuenca:"Guadalquivir", cap:823, emb:310, lat:38.21,lng:-5.15},
+  {nombre:"Tranco de Beas",    cuenca:"Guadalquivir", cap:500, emb:210, lat:38.14,lng:-2.78},
+  {nombre:"Bembézar",          cuenca:"Guadalquivir", cap:296, emb:95,  lat:37.99,lng:-5.36},
+  {nombre:"Zújar",             cuenca:"Guadalquivir", cap:308, emb:98,  lat:38.91,lng:-5.13},
+  {nombre:"Guadalén",          cuenca:"Guadalquivir", cap:176, emb:68,  lat:38.12,lng:-3.43},
+  {nombre:"Retortillo",        cuenca:"Guadalquivir", cap:149, emb:38,  lat:38.22,lng:-5.50},
+  {nombre:"Almendra",          cuenca:"Duero",        cap:2648,emb:1580,lat:41.23,lng:-6.27},
+  {nombre:"Ricobayo",          cuenca:"Duero",        cap:1136,emb:640, lat:41.62,lng:-5.87},
+  {nombre:"Riaño",             cuenca:"Duero",        cap:664, emb:420, lat:42.99,lng:-5.01},
+  {nombre:"Barrios de Luna",   cuenca:"Duero",        cap:308, emb:168, lat:42.85,lng:-5.90},
+  {nombre:"Porma",             cuenca:"Duero",        cap:318, emb:195, lat:42.96,lng:-5.35},
+  {nombre:"Aguilar de Campoo", cuenca:"Duero",        cap:247, emb:128, lat:42.80,lng:-4.31},
+  {nombre:"Cernadilla",        cuenca:"Duero",        cap:163, emb:82,  lat:41.95,lng:-6.54},
+  {nombre:"Villalcampo",       cuenca:"Duero",        cap:93,  emb:68,  lat:41.48,lng:-6.13},
+  {nombre:"Belesar",           cuenca:"Miño-Sil",     cap:655, emb:490, lat:42.65,lng:-7.70},
+  {nombre:"Bao",               cuenca:"Miño-Sil",     cap:296, emb:210, lat:42.09,lng:-7.07},
+  {nombre:"Lindoso",           cuenca:"Miño-Sil",     cap:240, emb:168, lat:41.87,lng:-8.18},
+  {nombre:"Salas",             cuenca:"Miño-Sil",     cap:142, emb:98,  lat:42.35,lng:-7.28},
+  {nombre:"Ullivarri",         cuenca:"Norte",        cap:146, emb:108, lat:42.86,lng:-2.53},
+  {nombre:"Urrúnaga",          cuenca:"Norte",        cap:72,  emb:54,  lat:42.95,lng:-2.59},
+];
+EMBALSES.forEach(e => { e.pct = Math.round(e.emb / e.cap * 100); });
+
+/* ── PALETA CUENCAS ── */
+const CUENCA_COLOR = {
+  "Ebro":"#3b9eff","Tajo":"#22c98a","Guadiana":"#f5a623",
+  "Guadalquivir":"#e07540","Duero":"#a78bfa","Júcar":"#f472b6",
+  "Sur":"#84cc16","Miño-Sil":"#2dd4bf","Norte":"#94a3b8"
+};
+
+/* ── STATE ── */
+let filtered = [...EMBALSES];
+let sortKey = "cap", sortDir = -1;
+let activeMarker = null;
+
+/* ── HELPERS ── */
+const isDark  = () => document.documentElement.getAttribute("data-theme") === "dark";
+const barCol  = p => p>=60?"var(--green)":p>=30?"var(--amber)":"var(--red)";
+const barHex  = p => p>=60?"#22c98a":p>=30?"#f5a623":"#f05252";
+const estBadge= p => p>=60?{l:"Bien",c:"bg"}:p>=30?{l:"Alerta",c:"ba"}:{l:"Crítico",c:"br"};
+
+/* ── MAP ── */
+const TILES_DARK  = "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+const TILES_LIGHT = "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png";
+const ATTRIB      = '&copy; <a href="https://carto.com/">CARTO</a>';
+
+const map = L.map("map",{zoomControl:true,scrollWheelZoom:true}).setView([40.2,-3.5],5);
+let tileLayer = L.tileLayer(isDark()?TILES_DARK:TILES_LIGHT,{attribution:ATTRIB,maxZoom:18}).addTo(map);
+
+function mkIcon(pct, selected) {
+  const col  = barHex(pct);
+  const sz   = selected ? 20 : 13;
+  const ring = selected ? `stroke:#fff;stroke-width:3` : `stroke:rgba(0,0,0,.25);stroke-width:1`;
+  const inner= selected ? `<circle cx="10" cy="10" r="4" fill="white" opacity=".9"/>` : "";
+  const svg  = `<svg xmlns="http://www.w3.org/2000/svg" width="${sz}" height="${sz}" viewBox="0 0 20 20">
+    <circle cx="10" cy="10" r="9" fill="${col}" ${ring}/>
+    ${inner}
+  </svg>`;
+  return L.divIcon({html:svg,className:"",iconSize:[sz,sz],iconAnchor:[sz/2,sz/2]});
+}
+
+const MARKERS = {};
+EMBALSES.forEach(e => {
+  const m = L.marker([e.lat,e.lng],{icon:mkIcon(e.pct,false)});
+  m.bindPopup(`
+    <div class="pname">${e.nombre}</div>
+    <div class="prow"><span>Cuenca</span><span>${e.cuenca}</span></div>
+    <div class="prow"><span>Capacidad</span><span>${e.cap.toLocaleString("es")} hm³</span></div>
+    <div class="prow"><span>Embalsado</span><span>${e.emb.toLocaleString("es")} hm³</span></div>
+    <div class="prow"><span>Llenado</span><span>${e.pct}%</span></div>
+    <div class="pbar-bg"><div class="pbar-fill" style="width:${e.pct}%;background:${barHex(e.pct)}"></div></div>
+  `,{maxWidth:220});
+  m.on("click",()=>onMarkerClick(e,m));
+  m.addTo(map);
+  MARKERS[e.nombre] = m;
+});
+
+function onMarkerClick(e, m) {
+  // Toggle off if same marker
+  if (activeMarker === e.nombre) { clearMapFilter(); return; }
+
+  // Deselect previous
+  if (activeMarker) {
+    const prev = EMBALSES.find(x=>x.nombre===activeMarker);
+    if (prev) MARKERS[prev.nombre].setIcon(mkIcon(prev.pct,false));
+  }
+  activeMarker = e.nombre;
+  m.setIcon(mkIcon(e.pct,true));
+
+  // Filter by cuenca
+  document.getElementById("cuenca-filter").value = e.cuenca;
+  document.getElementById("mapPill").classList.add("on");
+  applyFilters();
+
+  // Highlight row
+  setTimeout(()=>{
+    const rows = document.querySelectorAll("#tbody tr");
+    rows.forEach(r=>r.classList.remove("hl"));
+    const target = [...rows].find(r=>r.dataset.n===e.nombre);
+    if (target) { target.classList.add("hl"); target.scrollIntoView({block:"nearest",behavior:"smooth"}); }
+  },60);
+}
+
+function clearMapFilter() {
+  activeMarker = null;
+  document.getElementById("mapPill").classList.remove("on");
+  document.getElementById("cuenca-filter").value = "";
+  EMBALSES.forEach(e=>MARKERS[e.nombre].setIcon(mkIcon(e.pct,false)));
+  applyFilters();
+}
+
+function onRowClick(nombre) {
+  const e = EMBALSES.find(x=>x.nombre===nombre);
+  if (!e) return;
+  map.flyTo([e.lat,e.lng],9,{duration:.8});
+  MARKERS[e.nombre].openPopup();
+  document.querySelectorAll("#tbody tr").forEach(r=>r.classList.remove("hl"));
+  const row = document.querySelector(`#tbody tr[data-n="${nombre}"]`);
+  if (row) row.classList.add("hl");
+}
+
+/* ── THEME TOGGLE ── */
+document.getElementById("themeBtn").addEventListener("click",()=>{
+  const dark = isDark();
+  document.documentElement.setAttribute("data-theme", dark?"light":"dark");
+  document.getElementById("themeBtn").textContent = dark ? "🌙" : "☀️";
+  map.removeLayer(tileLayer);
+  tileLayer = L.tileLayer(dark?TILES_LIGHT:TILES_DARK,{attribution:ATTRIB,maxZoom:18}).addTo(map);
+  applyFilters();
+});
+
+/* ── RENDER METRICS ── */
+function renderMetrics(data) {
+  const totalCap = data.reduce((a,b)=>a+b.cap,0);
+  const totalEmb = data.reduce((a,b)=>a+b.emb,0);
+  const pct = Math.round(totalEmb/totalCap*100)||0;
+  const crit = data.filter(e=>e.pct<30).length;
+  document.getElementById("metrics").innerHTML = `
+    <div class="metric hi"><div class="lbl">Capacidad total</div><div class="val">${Math.round(totalCap).toLocaleString("es")}</div><div class="sub">hm³</div></div>
+    <div class="metric"><div class="lbl">Agua embalsada</div><div class="val">${Math.round(totalEmb).toLocaleString("es")}</div><div class="sub">hm³</div></div>
+    <div class="metric"><div class="lbl">Llenado medio</div><div class="val">${pct}%</div><div class="sub">del total seleccionado</div></div>
+    <div class="metric"><div class="lbl">Embalses críticos</div><div class="val">${crit}</div><div class="sub">< 30% de capacidad</div></div>
+    <div class="metric"><div class="lbl">Total embalses</div><div class="val">${data.length}</div><div class="sub">en selección</div></div>
+  `;
+}
+
+/* ── RENDER TABLE ── */
+function renderTable(data) {
+  document.getElementById("count").textContent = `${data.length} resultados`;
+  document.getElementById("tbody").innerHTML = data.map(e => {
+    const st = estBadge(e.pct);
+    const cc = CUENCA_COLOR[e.cuenca]||"#888";
+    const nb = e.nombre.replace(/'/g,"\\'");
+    return `<tr data-n="${e.nombre}" onclick="onRowClick('${nb}')">
+      <td class="tn">${e.nombre}</td>
+      <td class="tc"><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${cc};margin-right:6px;vertical-align:middle"></span>${e.cuenca}</td>
+      <td class="tm">${e.cap.toLocaleString("es")}</td>
+      <td class="tm">${e.emb.toLocaleString("es")}</td>
+      <td><div class="barcell"><div class="barbg"><div class="barfill" style="width:${e.pct}%;background:${barCol(e.pct)}"></div></div><span class="plbl">${e.pct}%</span></div></td>
+      <td><span class="badge ${st.c}">${st.l}</span></td>
+    </tr>`;
+  }).join("");
+}
+
+/* ── RENDER CHARTS ── */
+let ch1=null,ch2=null,ch3=null;
+const gridCol = () => isDark()?"rgba(255,255,255,.06)":"rgba(0,0,0,.06)";
+const tickCol = () => isDark()?"#7d91a8":"#52667a";
+
+function renderCharts(data) {
+  const byCuenca = {};
+  data.forEach(e=>{
+    if(!byCuenca[e.cuenca]) byCuenca[e.cuenca]={cap:0,emb:0};
+    byCuenca[e.cuenca].cap+=e.cap; byCuenca[e.cuenca].emb+=e.emb;
+  });
+  const cuencas = Object.keys(byCuenca).sort((a,b)=>byCuenca[b].cap-byCuenca[a].cap);
+  const cols    = cuencas.map(c=>CUENCA_COLOR[c]||"#888");
+
+  document.getElementById("leg1").innerHTML = cuencas.map(c=>
+    `<span><span class="ldot" style="background:${CUENCA_COLOR[c]||"#888"}"></span>${c}</span>`
+  ).join("");
+
+  if(ch1) ch1.destroy();
+  ch1 = new Chart(document.getElementById("c1"),{
+    type:"bar",
+    data:{labels:cuencas,datasets:[
+      {label:"Capacidad",data:cuencas.map(c=>Math.round(byCuenca[c].cap)),backgroundColor:cols.map(c=>c+"44"),borderColor:cols,borderWidth:1.5},
+      {label:"Embalsado",data:cuencas.map(c=>Math.round(byCuenca[c].emb)),backgroundColor:cols,borderColor:cols,borderWidth:1.5}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:tickCol(),font:{size:10}},grid:{color:gridCol()}},y:{ticks:{color:tickCol(),font:{size:10}},grid:{color:gridCol()}}}}
+  });
+
+  const top10 = [...data].sort((a,b)=>b.cap-a.cap).slice(0,10);
+  if(ch2) ch2.destroy();
+  ch2 = new Chart(document.getElementById("c2"),{
+    type:"bar",
+    data:{labels:top10.map(e=>e.nombre.length>13?e.nombre.slice(0,12)+"…":e.nombre),
+      datasets:[{data:top10.map(e=>e.pct),backgroundColor:top10.map(e=>barHex(e.pct)),borderRadius:3,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:"y",plugins:{legend:{display:false}},
+      scales:{x:{min:0,max:100,ticks:{callback:v=>v+"%",color:tickCol(),font:{size:10}},grid:{color:gridCol()}},
+              y:{ticks:{color:tickCol(),font:{size:10}},grid:{color:"transparent"}}}}
+  });
+
+  const bien=data.filter(e=>e.pct>=60).length,
+        alert_=data.filter(e=>e.pct>=30&&e.pct<60).length,
+        crit=data.filter(e=>e.pct<30).length;
+  if(ch3) ch3.destroy();
+  ch3 = new Chart(document.getElementById("c3"),{
+    type:"doughnut",
+    data:{labels:["Bien","Alerta","Crítico"],datasets:[{data:[bien,alert_,crit],backgroundColor:["#22c98a","#f5a623","#f05252"],borderWidth:0,hoverOffset:6}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:"68%",
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.raw}`}}}}
+  });
+}
+
+/* ── SORT HEADERS ── */
+document.querySelectorAll("thead th[data-key]").forEach(th=>{
+  th.addEventListener("click",()=>{
+    const k=th.dataset.key;
+    if(sortKey===k) sortDir*=-1; else{sortKey=k;sortDir=-1;}
+    document.querySelectorAll("thead th").forEach(h=>h.classList.remove("sorted"));
+    th.classList.add("sorted");
+    th.querySelector(".si").textContent=sortDir===1?"↑":"↓";
+    applyFilters();
+  });
+});
+
+/* ── APPLY FILTERS ── */
+function applyFilters() {
+  const q     = document.getElementById("search").value.toLowerCase().trim();
+  const cuenca= document.getElementById("cuenca-filter").value;
+  const estado= document.getElementById("estado-filter").value;
+
+  filtered = EMBALSES.filter(e=>{
+    const mQ=!q||e.nombre.toLowerCase().includes(q)||e.cuenca.toLowerCase().includes(q);
+    const mC=!cuenca||e.cuenca===cuenca;
+    const mE=!estado||(estado==="bien"&&e.pct>=60)||(estado==="alerta"&&e.pct>=30&&e.pct<60)||(estado==="critico"&&e.pct<30);
+    return mQ&&mC&&mE;
+  });
+
+  filtered.sort((a,b)=>{
+    const va=sortKey==="cap"?a.cap:sortKey==="pct"?a.pct:sortKey==="emb"?a.emb:a.nombre;
+    const vb=sortKey==="cap"?b.cap:sortKey==="pct"?b.pct:sortKey==="emb"?b.emb:b.nombre;
+    return sortDir*(va>vb?1:va<vb?-1:0);
+  });
+
+  // Marker opacity
+  EMBALSES.forEach(e=>{
+    MARKERS[e.nombre].setOpacity(filtered.some(f=>f.nombre===e.nombre)?1:.15);
+  });
+
+  renderMetrics(filtered);
+  renderTable(filtered);
+  renderCharts(filtered);
+}
+
+function resetAll() {
+  document.getElementById("search").value="";
+  document.getElementById("cuenca-filter").value="";
+  document.getElementById("estado-filter").value="";
+  clearMapFilter();
+}
+
+/* ── INIT ── */
+const cuencasUnicas=[...new Set(EMBALSES.map(e=>e.cuenca))].sort();
+const sel=document.getElementById("cuenca-filter");
+cuencasUnicas.forEach(c=>{const o=document.createElement("option");o.value=c;o.textContent=c;sel.appendChild(o);});
+
+["search","cuenca-filter","estado-filter","sort-select"].forEach(id=>{
+  const el=document.getElementById(id);
+  el.addEventListener("input",applyFilters);
+  el.addEventListener("change",applyFilters);
+});
+
+applyFilters();
+</script>
+</body>
+</html>
